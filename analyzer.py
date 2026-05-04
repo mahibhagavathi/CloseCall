@@ -100,8 +100,18 @@ def analyze_transcript(transcript_content: str, transcript_id: str) -> dict:
 
 
 @st.cache_data(show_spinner=False)
-def generate_email(summary: str, key_issue: str, next_step: str, sentiment: str, transcript_excerpt: str) -> str:
+def generate_email(
+    customer_name: str,
+    summary: str,
+    key_issue: str,
+    resolution_status: str,
+    next_step: str,
+    order_or_ref: str,
+    sentiment: str,
+    call_type: str,
+) -> str:
     client = get_groq_client()
+    transcript_excerpt = f"Issue: {key_issue}. Resolution: {resolution_status}. Ref: {order_or_ref}."
     try:
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -123,12 +133,17 @@ def generate_email(summary: str, key_issue: str, next_step: str, sentiment: str,
         return f"Could not generate email: {e}"
 
 
-def analyze_batch(transcripts: list, progress_placeholder) -> list:
+def analyze_batch(transcripts: list, progress_callback=None) -> list:
+    """
+    Analyze a list of transcripts.
+    progress_callback(i, total, call_id) is called after each transcript.
+    It is a plain function — NOT a Streamlit widget.
+    """
     results = []
     total = len(transcripts)
     for i, t in enumerate(transcripts):
-        pct = (i + 1) / total
-        progress_placeholder.progress(pct, text=f"Analyzing call {i+1} of {total}...")
         analysis = analyze_transcript(t["content"], t["id"])
         results.append({**t, **analysis})
+        if progress_callback is not None:
+            progress_callback(i, total, t.get("id", f"call-{i+1}"))
     return results
