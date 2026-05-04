@@ -1,4 +1,4 @@
-cat > /home/claude/sales-intelligence/app.py << 'ENDOFFILE'
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -770,4 +770,3 @@ elif stage == "dashboard": render_dashboard()
 else:
     st.session_state["stage"] = "home"
     st.rerun()
-ENDOFFILE
