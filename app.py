@@ -1,805 +1,773 @@
-
+cat > /home/claude/sales-intelligence/app.py << 'ENDOFFILE'
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from data_loader import load_sample_transcripts, load_csv_transcripts
 from analyzer import analyze_batch, generate_email
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 # PAGE CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="CloseCall — Sales Intelligence",
+    page_title="CloseCall",
     page_icon="📞",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DESIGN TOKENS
-# ─────────────────────────────────────────────────────────────────────────────
-C = {
-    "bg":           "#f0f4f8",
-    "surface":      "#ffffff",
-    "border":       "#dde3ec",
-    "sidebar_bg":   "#1c2333",
-    "sidebar_text": "#a8b4c8",
-    "sidebar_head": "#ffffff",
-    "text_primary": "#0f1923",
-    "text_secondary":"#4a5568",
-    "text_muted":   "#8896a8",
-    "accent":       "#0ea5e9",       # sky-500
-    "accent_dk":    "#0284c7",
-    "accent_light": "#e0f2fe",
-    "positive":     "#059669",
-    "positive_bg":  "#ecfdf5",
-    "negative":     "#dc2626",
-    "negative_bg":  "#fef2f2",
-    "mixed":        "#d97706",
-    "mixed_bg":     "#fffbeb",
-    "neutral_bg":   "#f1f5f9",
-    "hot":          "#dc2626",
-    "hot_bg":       "#fef2f2",
-    "warm":         "#d97706",
-    "warm_bg":      "#fffbeb",
-    "cold":         "#2563eb",
-    "cold_bg":      "#eff6ff",
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CSS
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown(f"""
+# ──────────────────────────────────────────────────────────────
+# GLOBAL CSS
+# ──────────────────────────────────────────────────────────────
+st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&display=swap');
 
-*, html, body, [class*="css"] {{
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-}}
-.stApp {{ background: {C['bg']}; }}
-
-/* ── Sidebar ── */
-[data-testid="stSidebar"] {{
-    background: {C['sidebar_bg']} !important;
-    border-right: none !important;
-}}
-[data-testid="stSidebar"] * {{ color: {C['sidebar_text']} !important; }}
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {{ color: {C['sidebar_head']} !important; }}
-[data-testid="stSidebar"] .stSelectbox label,
-[data-testid="stSidebar"] .stMultiSelect label {{
-    color: {C['sidebar_text']} !important;
-    font-size: 0.7rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.1em !important;
-    font-weight: 600 !important;
-}}
-[data-testid="stSidebar"] [data-baseweb="select"] div {{
-    background: #253048 !important;
-    border-color: #3a4a63 !important;
-    color: #ffffff !important;
-}}
-[data-testid="stSidebar"] [data-baseweb="tag"] {{
-    background: #0ea5e9 !important;
-}}
+*, html, body, [class*="css"] {
+    font-family: 'Geist', sans-serif !important;
+}
+.stApp { background: #f8f9fb; }
 
 /* ── Hide chrome ── */
-#MainMenu, footer, header {{ visibility: hidden; }}
-[data-testid="stToolbar"] {{ display: none; }}
+#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stToolbar"] { display: none; }
+[data-testid="stDecoration"] { display: none; }
 
-/* ── Progress bar & text ── */
-.stProgress > div > div {{ background-color: {C['accent']} !important; }}
-.stProgress p, [data-testid="stProgressBarText"],
-div[class*="progress"] p {{ color: {C['text_primary']} !important; font-size: 0.85rem !important; font-weight: 600 !important; }}
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: #0d1117 !important;
+    border-right: 1px solid #21262d !important;
+}
+[data-testid="stSidebar"] > div { padding-top: 0 !important; }
+section[data-testid="stSidebar"] * { color: #8b949e; }
 
-/* ── Logo ── */
-.logo {{
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-weight: 800;
-    font-size: 2.6rem;
-    letter-spacing: -0.03em;
-    line-height: 1;
-    color: {C['text_primary']};
-}}
-.logo span {{ color: {C['accent']}; }}
-.logo-sub {{
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: {C['text_muted']};
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    margin-top: 0.3rem;
-}}
+/* ── Sidebar select/multiselect ── */
+[data-testid="stSidebar"] [data-baseweb="select"] > div,
+[data-testid="stSidebar"] [data-baseweb="select"] > div:hover {
+    background: #161b22 !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
+}
+[data-testid="stSidebar"] [data-baseweb="tag"] { background: #1f6feb !important; }
+[data-testid="stSidebar"] span { color: #e6edf3 !important; }
 
-/* ── KPI Cards ── */
-.kpi-card {{
-    background: {C['surface']};
-    border: 1px solid {C['border']};
-    border-radius: 14px;
-    padding: 1.5rem 1.8rem;
-    border-top: 3px solid {C['accent']};
-}}
-.kpi-label {{
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: {C['text_muted']};
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    margin-bottom: 0.6rem;
-}}
-.kpi-value {{
-    font-size: 2.4rem;
-    font-weight: 800;
-    color: {C['text_primary']};
-    line-height: 1;
-    letter-spacing: -0.03em;
-}}
-.kpi-sub {{
-    font-size: 0.74rem;
-    color: {C['text_muted']};
-    margin-top: 0.35rem;
-}}
-
-/* ── Section header ── */
-.sec-head {{
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: {C['text_primary']};
-    margin-bottom: 0.2rem;
-}}
-.sec-sub {{
-    font-size: 0.76rem;
-    color: {C['text_muted']};
-    margin-bottom: 1rem;
-}}
-
-/* ── Tags ── */
-.tag {{
-    display: inline-block; border-radius: 6px; padding: 2px 10px;
-    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-}}
-.tag-positive {{ background:{C['positive_bg']}; color:{C['positive']}; }}
-.tag-negative {{ background:{C['negative_bg']}; color:{C['negative']}; }}
-.tag-mixed    {{ background:{C['mixed_bg']};    color:{C['mixed']};    }}
-.tag-neutral  {{ background:{C['neutral_bg']};  color:{C['text_secondary']}; }}
-.tag-hot      {{ background:{C['hot_bg']};      color:{C['hot']};      }}
-.tag-warm     {{ background:{C['warm_bg']};     color:{C['warm']};     }}
-.tag-cold     {{ background:{C['cold_bg']};     color:{C['cold']};     }}
-
-/* ── Table ── */
-.calls-table {{
-    background: {C['surface']};
-    border: 1px solid {C['border']};
-    border-radius: 14px;
-    overflow: hidden;
-    width: 100%;
-}}
-.calls-table table {{ width:100%; border-collapse:collapse; font-size:0.83rem; }}
-.calls-table thead tr {{
-    background: {C['bg']};
-    border-bottom: 1px solid {C['border']};
-}}
-.calls-table th {{
-    padding: 10px 16px;
-    text-align: left;
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: {C['text_muted']};
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    white-space: nowrap;
-}}
-.calls-table tbody tr {{ border-bottom: 1px solid {C['border']}; }}
-.calls-table tbody tr:last-child {{ border-bottom: none; }}
-.calls-table tbody tr:hover {{ background: #f8fafc; }}
-.calls-table td {{ padding: 10px 16px; vertical-align: middle; }}
-
-/* ── Detail panels ── */
-.dp {{
-    background: {C['surface']};
-    border: 1px solid {C['border']};
-    border-radius: 12px;
-    padding: 1.2rem 1.5rem;
-    margin-bottom: 0.8rem;
-}}
-.dp-label {{
-    font-size: 0.68rem; font-weight: 700; color: {C['text_muted']};
-    text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 0.4rem;
-}}
-.dp-value {{ font-size: 0.88rem; color: {C['text_primary']}; line-height: 1.6; }}
-
-.transcript-box {{
-    background: {C['bg']};
-    border: 1px solid {C['border']};
-    border-radius: 10px;
-    padding: 1.2rem 1.5rem;
-    font-size: 0.82rem;
-    color: {C['text_secondary']};
-    line-height: 1.9;
-    max-height: 340px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-}}
-.email-box {{
-    background: {C['bg']};
-    border: 1px solid {C['border']};
-    border-radius: 10px;
-    padding: 1.2rem 1.5rem;
-    font-size: 0.87rem;
-    color: {C['text_primary']};
-    line-height: 1.85;
-    white-space: pre-wrap;
-}}
-.quote-bar {{
-    border-left: 3px solid {C['accent']};
-    padding: 0.6rem 1rem;
-    background: {C['accent_light']};
-    border-radius: 0 8px 8px 0;
-    font-style: italic;
-    color: {C['text_secondary']};
-    font-size: 0.86rem;
-    margin: 0.8rem 0;
-}}
-.action-row {{
-    display: flex; gap: 0.7rem; align-items: flex-start;
-    padding: 0.65rem 0; border-bottom: 1px solid {C['border']};
-    font-size: 0.86rem; color: {C['text_primary']};
-}}
-.action-row:last-child {{ border-bottom: none; }}
-.action-num {{
-    min-width: 22px; height: 22px; background: {C['accent_light']};
-    color: {C['accent']}; font-weight: 700; font-size: 0.7rem;
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; margin-top: 1px;
-}}
-
-/* ── Buttons ── */
-.stButton > button {{
-    background: {C['accent']} !important;
+/* ── Streamlit buttons ── */
+.stButton > button {
+    background: #1f6feb !important;
     color: #fff !important;
     border: none !important;
     border-radius: 8px !important;
-    font-weight: 700 !important;
-    font-size: 0.84rem !important;
-    padding: 0.55rem 1.4rem !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    padding: 0.6rem 1.5rem !important;
     width: 100% !important;
-    transition: background 0.15s !important;
     letter-spacing: 0.01em !important;
-}}
-.stButton > button:hover {{ background: {C['accent_dk']} !important; }}
+    transition: all 0.15s !important;
+    box-shadow: 0 1px 3px rgba(31,111,235,0.3) !important;
+}
+.stButton > button:hover {
+    background: #388bfd !important;
+    box-shadow: 0 3px 10px rgba(31,111,235,0.4) !important;
+    transform: translateY(-1px) !important;
+}
 
-/* ── Inputs ── */
-div[data-testid="stTextInput"] input {{
-    border-radius: 8px !important;
-    border: 1px solid {C['border']} !important;
-    font-size: 0.86rem !important;
-    background: {C['surface']} !important;
-}}
-div[data-testid="stSelectbox"] > div > div,
-div[data-testid="stMultiSelect"] > div > div {{
-    border-radius: 8px !important;
-    border: 1px solid {C['border']} !important;
-    background: {C['surface']} !important;
-}}
+/* ── Progress ── */
+.stProgress > div > div { background: #1f6feb !important; }
+[data-testid="stProgressBarText"] {
+    color: #0d1117 !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+}
 
 /* ── Tabs ── */
-.stTabs [data-baseweb="tab-list"] {{
-    gap: 2px;
-    border-bottom: 1px solid {C['border']};
-    background: transparent;
-}}
-.stTabs [data-baseweb="tab"] {{
-    font-size: 0.8rem !important;
-    font-weight: 600 !important;
-    color: {C['text_muted']} !important;
-    padding: 0.5rem 1.1rem !important;
-    border-radius: 8px 8px 0 0 !important;
-}}
-.stTabs [aria-selected="true"] {{
-    color: {C['accent']} !important;
-    border-bottom: 2px solid {C['accent']} !important;
-    background: {C['accent_light']} !important;
-}}
-
-/* ── Metric ── */
-[data-testid="metric-container"] {{
-    background: {C['surface']};
-    border: 1px solid {C['border']};
-    border-radius: 12px;
-    padding: 1rem 1.2rem;
-}}
-
-/* ── Entry cards ── */
-.entry-card {{
-    background: {C['surface']};
-    border: 1.5px solid {C['border']};
-    border-radius: 16px;
-    padding: 2rem;
-    height: 100%;
-    transition: border-color 0.15s, box-shadow 0.15s;
-}}
-.entry-card:hover {{
-    border-color: {C['accent']};
-    box-shadow: 0 4px 24px rgba(14,165,233,0.10);
-}}
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    gap: 0 !important;
+}
+.stTabs [data-baseweb="tab"] {
+    font-weight: 500 !important;
+    font-size: 0.82rem !important;
+    color: #64748b !important;
+    padding: 0.6rem 1.2rem !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    border-bottom: 2px solid transparent !important;
+    margin-bottom: -2px !important;
+}
+.stTabs [aria-selected="true"] {
+    color: #1f6feb !important;
+    border-bottom: 2px solid #1f6feb !important;
+    background: transparent !important;
+}
 
 /* ── File uploader ── */
-[data-testid="stFileUploader"] section {{
-    border: 2px dashed {C['border']} !important;
-    border-radius: 10px !important;
-    background: {C['surface']} !important;
-}}
+[data-testid="stFileUploader"] section {
+    background: #fff !important;
+    border: 2px dashed #cbd5e1 !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+}
+[data-testid="stFileUploader"] section:hover {
+    border-color: #1f6feb !important;
+    background: #f0f7ff !important;
+}
+
+/* ── Text input / select ── */
+div[data-testid="stTextInput"] input {
+    border-radius: 8px !important;
+    border: 1.5px solid #e2e8f0 !important;
+    font-size: 0.875rem !important;
+    background: #fff !important;
+    padding: 0.5rem 0.8rem !important;
+}
+div[data-testid="stTextInput"] input:focus {
+    border-color: #1f6feb !important;
+    box-shadow: 0 0 0 3px rgba(31,111,235,0.1) !important;
+}
+
+/* ── Metrics ── */
+[data-testid="metric-container"] {
+    background: #fff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    padding: 1.2rem 1.4rem !important;
+}
 
 /* ── Spinner ── */
-.stSpinner > div {{ border-top-color: {C['accent']} !important; }}
+.stSpinner > div { border-top-color: #1f6feb !important; }
+
+/* ── Tooltip ── */
+div[data-baseweb="tooltip"] { font-family: 'Geist', sans-serif !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 # SESSION STATE
-# ─────────────────────────────────────────────────────────────────────────────
-for key, val in [
-    ("state", "empty"),
-    ("results_df", None),
-    ("total_available", 0),
-    ("source_label", ""),
-]:
-    if key not in st.session_state:
-        st.session_state[key] = val
+# ──────────────────────────────────────────────────────────────
+DEFAULTS = {
+    "stage": "home",          # home | loading | dashboard
+    "results_df": None,
+    "total_fetched": 0,
+    "source_label": "",
+    "step_idx": 0,
+    "_pending_transcripts": None,
+}
+for k, v in DEFAULTS.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-# ─────────────────────────────────────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
-def sent_tag(v):
-    k = v.lower() if v else "neutral"
-    if k not in ("positive","negative","mixed","neutral"): k = "neutral"
-    return f'<span class="tag tag-{k}">{v}</span>'
+# ──────────────────────────────────────────────────────────────
+# DESIGN HELPERS
+# ──────────────────────────────────────────────────────────────
+SENT_COLORS = {
+    "Positive": ("#059669", "#ecfdf5"),
+    "Negative": ("#dc2626", "#fef2f2"),
+    "Mixed":    ("#d97706", "#fffbeb"),
+    "Neutral":  ("#475569", "#f1f5f9"),
+}
+LEAD_COLORS = {
+    "Hot":  ("#dc2626", "#fef2f2"),
+    "Warm": ("#d97706", "#fffbeb"),
+    "Cold": ("#2563eb", "#eff6ff"),
+}
 
-def lead_tag(v):
-    k = v.lower() if v else "cold"
-    if k not in ("hot","warm","cold"): k = "cold"
-    return f'<span class="tag tag-{k}">{v}</span>'
+def pill(text, fg, bg):
+    return (f'<span style="display:inline-block;background:{bg};color:{fg};'
+            f'border-radius:6px;padding:2px 10px;font-size:0.7rem;font-weight:700;'
+            f'letter-spacing:0.05em;text-transform:uppercase;">{text}</span>')
 
-def score_html(n):
-    n = int(n) if str(n).isdigit() else 0
-    dots = "".join(
-        f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:3px;background:{"#0ea5e9" if i<=n else C["border"]};"></span>'
-        for i in range(1,6)
-    )
-    return dots
+def sent_pill(v):
+    fg, bg = SENT_COLORS.get(v, ("#475569","#f1f5f9"))
+    return pill(v, fg, bg)
 
-def chart_layout(**kwargs):
-    """Base plotly layout — no showlegend so callers can set it freely."""
-    base = dict(
-        plot_bgcolor=C["surface"],
-        paper_bgcolor=C["surface"],
-        font=dict(family="Plus Jakarta Sans, sans-serif", color=C["text_secondary"], size=11),
-        margin=dict(l=10, r=10, t=30, b=10),
-        xaxis=dict(gridcolor=C["border"], zerolinecolor=C["border"], title=None),
-        yaxis=dict(gridcolor=C["border"], zerolinecolor=C["border"], title=None),
-    )
-    base.update(kwargs)
-    return base
+def lead_pill(v):
+    fg, bg = LEAD_COLORS.get(v, ("#2563eb","#eff6ff"))
+    return pill(v, fg, bg)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SIDEBAR — filters shown only in dashboard state
-# ─────────────────────────────────────────────────────────────────────────────
-def render_sidebar(df: pd.DataFrame):
+def score_dots(n):
+    try: n = int(n)
+    except: n = 0
+    html = ""
+    for i in range(1, 6):
+        c = "#1f6feb" if i <= n else "#e2e8f0"
+        html += f'<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:{c};margin-right:4px;"></span>'
+    return html
+
+def card(content, border_top="transparent", padding="1.4rem 1.6rem"):
+    return f"""<div style="background:#fff;border:1px solid #e2e8f0;border-top:3px solid {border_top};
+border-radius:14px;padding:{padding};margin-bottom:0;">{content}</div>"""
+
+def section_title(t, sub=""):
+    sub_html = f'<div style="font-size:0.76rem;color:#94a3b8;margin-top:0.15rem;">{sub}</div>' if sub else ""
+    return f'<div style="font-size:0.9rem;font-weight:700;color:#0f172a;margin-bottom:{"0.2rem" if sub else "0.8rem"}">{t}</div>{sub_html}'
+
+# ──────────────────────────────────────────────────────────────
+# SIDEBAR  (only in dashboard stage)
+# ──────────────────────────────────────────────────────────────
+def render_sidebar_dashboard(df_all):
     with st.sidebar:
-        st.markdown(f"""
-        <div style="padding: 1rem 0 0.5rem 0;">
-            <div class="logo" style="font-size:2rem;">Close<span>Call</span></div>
-            <div class="logo-sub">Sales Intelligence</div>
+        st.markdown("""
+        <div style="padding:1.8rem 1rem 1rem 1rem;border-bottom:1px solid #21262d;margin-bottom:1.4rem;">
+          <div style="font-family:'Instrument Serif',serif;font-size:1.8rem;color:#e6edf3;letter-spacing:-0.02em;line-height:1;">
+            Close<span style="color:#1f6feb;">Call</span>
+          </div>
+          <div style="font-size:0.68rem;font-weight:600;color:#30363d;text-transform:uppercase;letter-spacing:0.14em;margin-top:0.3rem;">
+            Sales Intelligence
+          </div>
         </div>
-        <hr style="border-color:#2d3f5a; margin: 1rem 0 1.5rem 0;">
         """, unsafe_allow_html=True)
 
-        st.markdown('<div style="font-size:0.68rem;font-weight:700;color:#a8b4c8;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1rem;">Dashboard Filters</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:0.68rem;font-weight:700;color:#30363d;text-transform:uppercase;letter-spacing:0.12em;padding:0 1rem;margin-bottom:0.8rem;">Filters</div>', unsafe_allow_html=True)
 
-        companies = sorted(df["company"].dropna().unique().tolist())
-        sentiments = sorted(df["sentiment"].dropna().unique().tolist())
-        lead_types = sorted(df["lead_type"].dropna().unique().tolist())
-        outcomes   = sorted(df["outcome"].dropna().unique().tolist())
+        companies  = sorted(df_all["company"].dropna().unique().tolist())
+        sentiments = sorted(df_all["sentiment"].dropna().unique().tolist())
+        leads      = sorted(df_all["lead_type"].dropna().unique().tolist())
+        outcomes   = sorted(df_all["outcome"].dropna().unique().tolist())
 
-        sel_companies  = st.multiselect("Company",   companies,  default=companies,  key="f_company")
-        sel_sentiments = st.multiselect("Sentiment", sentiments, default=sentiments, key="f_sentiment")
-        sel_leads      = st.multiselect("Lead Type", lead_types, default=lead_types, key="f_lead")
-        sel_outcomes   = st.multiselect("Outcome",   outcomes,   default=outcomes,   key="f_outcome")
+        sel_co   = st.multiselect("Company",   companies,  default=companies,  key="f_co")
+        sel_sent = st.multiselect("Sentiment", sentiments, default=sentiments, key="f_sent")
+        sel_lead = st.multiselect("Lead Type", leads,      default=leads,      key="f_lead")
+        sel_out  = st.multiselect("Outcome",   outcomes,   default=outcomes,   key="f_out")
 
-        st.markdown('<hr style="border-color:#2d3f5a; margin: 1.2rem 0;">', unsafe_allow_html=True)
-        if st.button("Reset Filters", key="reset_filters"):
-            for k in ["f_company","f_sentiment","f_lead","f_outcome"]:
-                if k in st.session_state:
-                    del st.session_state[k]
+        st.markdown('<div style="height:1rem;"></div>', unsafe_allow_html=True)
+        if st.button("Reset Filters", key="reset"):
+            for k in ["f_co","f_sent","f_lead","f_out"]:
+                st.session_state.pop(k, None)
             st.rerun()
 
-        st.markdown('<hr style="border-color:#2d3f5a; margin: 1.2rem 0;">', unsafe_allow_html=True)
+        st.markdown('<hr style="border-color:#21262d;margin:1rem 0;">', unsafe_allow_html=True)
         if st.button("← New Analysis", key="new_analysis"):
-            st.session_state.state = "empty"
-            st.session_state.results_df = None
+            for k in list(DEFAULTS.keys()) + ["f_co","f_sent","f_lead","f_out"]:
+                st.session_state.pop(k, None)
             st.cache_data.clear()
-            for k in ["f_company","f_sentiment","f_lead","f_outcome"]:
-                if k in st.session_state:
-                    del st.session_state[k]
             st.rerun()
 
         st.markdown(f"""
-        <div style="margin-top:1.5rem; font-size:0.72rem; color:#4a6080; line-height:1.6;">
-            <div>{st.session_state.source_label}</div>
-            <div style="margin-top:0.3rem;">Groq · LLaMA 3.3 70B</div>
+        <div style="padding:0.8rem 1rem;font-size:0.72rem;color:#30363d;line-height:1.7;">
+          {st.session_state.source_label}<br>Groq · LLaMA 3.3 70B
         </div>
         """, unsafe_allow_html=True)
 
-    # Apply filters and return filtered df
-    filtered = df.copy()
-    if sel_companies:  filtered = filtered[filtered["company"].isin(sel_companies)]
-    if sel_sentiments: filtered = filtered[filtered["sentiment"].isin(sel_sentiments)]
-    if sel_leads:      filtered = filtered[filtered["lead_type"].isin(sel_leads)]
-    if sel_outcomes:   filtered = filtered[filtered["outcome"].isin(sel_outcomes)]
-    return filtered
+    # Apply filters
+    df = df_all.copy()
+    if sel_co:   df = df[df["company"].isin(sel_co)]
+    if sel_sent: df = df[df["sentiment"].isin(sel_sent)]
+    if sel_lead: df = df[df["lead_type"].isin(sel_lead)]
+    if sel_out:  df = df[df["outcome"].isin(sel_out)]
+    return df
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ENTRY STATE
-# ─────────────────────────────────────────────────────────────────────────────
-def render_entry():
+# ──────────────────────────────────────────────────────────────
+# HOME PAGE
+# ──────────────────────────────────────────────────────────────
+def render_home():
     with st.sidebar:
-        st.markdown(f"""
-        <div style="padding: 1.5rem 0;">
-            <div class="logo" style="font-size:2rem;">Close<span>Call</span></div>
-            <div class="logo-sub">Sales Intelligence</div>
+        st.markdown("""
+        <div style="padding:1.8rem 1rem 1rem 1rem;border-bottom:1px solid #21262d;margin-bottom:1.4rem;">
+          <div style="font-family:'Instrument Serif',serif;font-size:1.8rem;color:#e6edf3;letter-spacing:-0.02em;">
+            Close<span style="color:#1f6feb;">Call</span>
+          </div>
+          <div style="font-size:0.68rem;font-weight:600;color:#30363d;text-transform:uppercase;letter-spacing:0.14em;margin-top:0.3rem;">Sales Intelligence</div>
         </div>
-        <hr style="border-color:#2d3f5a;">
-        <div style="margin-top:1.2rem; font-size:0.78rem; color:#4a6080; line-height:1.8;">
-            <div>📊 Sentiment analysis</div>
-            <div>🔥 Lead scoring (Hot/Warm/Cold)</div>
-            <div>💬 Objection detection</div>
-            <div>⭐ Rep performance scoring</div>
-            <div>✉️ AI follow-up email writer</div>
+        <div style="padding:0 1rem;font-size:0.8rem;color:#6e7681;line-height:2;">
+          <div>📊&nbsp; Sentiment analysis</div>
+          <div>🔥&nbsp; Lead scoring (Hot / Warm / Cold)</div>
+          <div>💬&nbsp; Objection detection</div>
+          <div>⭐&nbsp; Rep performance scoring</div>
+          <div>✉️&nbsp; AI follow-up email writer</div>
+          <div>📋&nbsp; Recommended actions</div>
         </div>
         """, unsafe_allow_html=True)
 
     # Hero
-    st.markdown(f"""
-    <div style="padding: 2.5rem 0 2rem 0; border-bottom: 1px solid {C['border']}; margin-bottom: 2.5rem;">
-        <div class="logo">Close<span>Call</span></div>
-        <div style="font-size:1rem; color:{C['text_secondary']}; margin-top:0.7rem; max-width:480px; line-height:1.6;">
-            Turn sales call transcripts into actionable intelligence — sentiment, objections, lead scores, and follow-up emails in seconds.
-        </div>
+    st.markdown("""
+    <div style="padding:3rem 0 2.5rem 0;">
+      <div style="font-family:'Instrument Serif',serif;font-size:3.4rem;color:#0f172a;letter-spacing:-0.03em;line-height:1.1;margin-bottom:1rem;">
+        Turn calls into<br><span style="color:#1f6feb;">pipeline intelligence</span>
+      </div>
+      <div style="font-size:1rem;color:#64748b;max-width:520px;line-height:1.7;">
+        Paste in your transcripts or use our sample dataset.
+        CloseCall uses AI to extract sentiment, objections, lead quality, 
+        rep scores, and writes follow-up emails — in seconds.
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
-    col_a, gap, col_b = st.columns([10, 1, 10])
+    col_a, spacer, col_b = st.columns([11, 1, 11])
 
     with col_a:
-        st.markdown(f"""
-        <div class="entry-card">
-            <div style="font-size:1.5rem; margin-bottom:0.8rem;">📂</div>
-            <div style="font-size:0.95rem; font-weight:700; color:{C['text_primary']}; margin-bottom:0.4rem;">Upload Your Transcripts</div>
-            <div style="font-size:0.82rem; color:{C['text_secondary']}; line-height:1.6; margin-bottom:1.2rem;">
-                Upload a CSV with a <code>transcript</code> or <code>content</code> column.<br>
-                Optional: <code>id</code>, <code>company</code> columns.
-            </div>
+        st.markdown("""
+        <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:2rem;margin-bottom:1rem;">
+          <div style="font-size:1.8rem;margin-bottom:0.8rem;">📂</div>
+          <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:0.4rem;">Upload Your Transcripts</div>
+          <div style="font-size:0.83rem;color:#64748b;line-height:1.65;margin-bottom:1.2rem;">
+            Drop a CSV file with a <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;">transcript</code> or 
+            <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;">content</code> column.<br>
+            Optional: <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;">id</code> and 
+            <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;">company</code> columns.
+          </div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-        uploaded = st.file_uploader("", type=["csv"], label_visibility="collapsed")
+        uploaded = st.file_uploader("", type=["csv"], label_visibility="collapsed", key="csv_upload")
         if uploaded:
-            if st.button("Analyze Uploaded File", key="btn_upload"):
+            if st.button("Analyze Uploaded Calls →", key="btn_upload"):
                 try:
                     transcripts = load_csv_transcripts(uploaded)
-                    st.session_state.total_available = len(transcripts)
-                    st.session_state.source_label = f"{len(transcripts)} uploaded calls"
-                    st.session_state["_transcripts_to_process"] = transcripts
-                    st.session_state.state = "processing"
-                    st.rerun()
+                    _start_analysis(transcripts, f"{len(transcripts)} uploaded calls")
                 except Exception as e:
-                    st.error(f"Error reading CSV: {e}")
+                    st.error(f"CSV error: {e}")
 
-    with gap:
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;justify-content:center;height:200px;">
-            <span style="font-size:0.75rem;font-weight:700;color:{C['text_muted']};letter-spacing:0.1em;text-transform:uppercase;">or</span>
+    with spacer:
+        st.markdown("""
+        <div style="display:flex;align-items:center;justify-content:center;height:260px;">
+          <div style="width:1px;height:140px;background:#e2e8f0;position:relative;">
+            <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+              background:#f8f9fb;color:#94a3b8;font-size:0.72rem;font-weight:600;
+              padding:4px 0;white-space:nowrap;">or</span>
+          </div>
         </div>
         """, unsafe_allow_html=True)
 
     with col_b:
-        st.markdown(f"""
-        <div class="entry-card">
-            <div style="font-size:1.5rem; margin-bottom:0.8rem;">🗂️</div>
-            <div style="font-size:0.95rem; font-weight:700; color:{C['text_primary']}; margin-bottom:0.4rem;">Use Sample Dataset</div>
-            <div style="font-size:0.82rem; color:{C['text_secondary']}; line-height:1.6; margin-bottom:1.2rem;">
-                103 real sales call transcripts across fashion, real estate, finance, healthcare & tech.
-                No upload needed.
-            </div>
+        st.markdown("""
+        <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:16px;padding:2rem;margin-bottom:1rem;">
+          <div style="font-size:1.8rem;margin-bottom:0.8rem;">🗂️</div>
+          <div style="font-size:1rem;font-weight:700;color:#0f172a;margin-bottom:0.4rem;">Use Sample Dataset</div>
+          <div style="font-size:0.83rem;color:#64748b;line-height:1.65;margin-bottom:1.2rem;">
+            100 sales call transcripts across fashion, real estate,
+            finance, healthcare &amp; tech. Ready to analyze — no upload needed.
+          </div>
+          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+            <span style="background:#f0f7ff;color:#1f6feb;border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:600;">100 calls</span>
+            <span style="background:#f0fdf4;color:#059669;border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:600;">10 companies</span>
+            <span style="background:#fff7ed;color:#d97706;border-radius:20px;padding:3px 12px;font-size:0.72rem;font-weight:600;">5 industries</span>
+          </div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-        if st.button("Analyze Sample Data  ·  103 Calls", key="btn_sample"):
-            with st.spinner("Fetching transcripts from HuggingFace..."):
+        if st.button("Analyze Sample Dataset  →", key="btn_sample"):
+            with st.spinner("Fetching transcripts..."):
                 transcripts = load_sample_transcripts()
-            st.session_state.total_available = len(transcripts)
-            st.session_state.source_label = f"Sample dataset · {len(transcripts)} calls"
-            st.session_state["_transcripts_to_process"] = transcripts
-            st.session_state.state = "processing"
-            st.rerun()
+            _start_analysis(transcripts, f"Sample dataset · {len(transcripts)} calls")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PROCESSING STATE
-# ─────────────────────────────────────────────────────────────────────────────
-def render_processing():
-    transcripts = st.session_state.get("_transcripts_to_process", [])
+def _start_analysis(transcripts, label):
+    st.session_state["_pending_transcripts"] = transcripts
+    st.session_state["total_fetched"] = len(transcripts)
+    st.session_state["source_label"] = label
+    st.session_state["stage"] = "loading"
+    st.rerun()
+
+# ──────────────────────────────────────────────────────────────
+# LOADING PAGE  (step progress bar)
+# ──────────────────────────────────────────────────────────────
+def render_loading():
+    transcripts = st.session_state.get("_pending_transcripts", [])
     if not transcripts:
-        st.session_state.state = "empty"
+        st.session_state["stage"] = "home"
         st.rerun()
         return
 
+    total = len(transcripts)
+
+    _, col, _ = st.columns([1, 5, 1])
+    with col:
+        st.markdown(f"""
+        <div style="padding:4rem 0 2rem 0; text-align:center;">
+          <div style="font-family:'Instrument Serif',serif;font-size:2.2rem;color:#0f172a;margin-bottom:0.5rem;">
+            Analyzing {total} calls
+          </div>
+          <div style="font-size:0.9rem;color:#64748b;margin-bottom:2.5rem;">
+            CloseCall is reading each transcript and extracting insights using Groq LLaMA 3.3
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Step indicators
+        steps = ["Fetching transcripts", "Analyzing with AI", "Building insights"]
+        step_html = '<div style="display:flex;justify-content:center;gap:0;margin-bottom:2rem;">'
+        for i, s in enumerate(steps):
+            is_done    = i < 1
+            is_active  = i == 1
+            dot_bg     = "#1f6feb" if (is_done or is_active) else "#e2e8f0"
+            txt_color  = "#0f172a" if (is_done or is_active) else "#94a3b8"
+            line_color = "#1f6feb" if is_done else "#e2e8f0"
+            dot_inner  = "✓" if is_done else str(i+1)
+            step_html += f"""
+            <div style="display:flex;align-items:center;">
+              <div style="text-align:center;min-width:100px;">
+                <div style="width:32px;height:32px;border-radius:50%;background:{dot_bg};
+                  color:#fff;font-size:0.8rem;font-weight:700;display:flex;
+                  align-items:center;justify-content:center;margin:0 auto 0.4rem auto;">{dot_inner}</div>
+                <div style="font-size:0.72rem;font-weight:600;color:{txt_color};">{s}</div>
+              </div>
+              {"" if i==len(steps)-1 else f'<div style="width:60px;height:2px;background:{line_color};margin:0 0.3rem 1.2rem 0.3rem;"></div>'}
+            </div>"""
+        step_html += "</div>"
+        st.markdown(step_html, unsafe_allow_html=True)
+
+        progress = st.progress(0, text="Starting...")
+
+    def cb(i, total, label):
+        pct = (i + 1) / total
+        # Update step indicator: step 2 active while processing
+        progress.progress(pct, text=f"Analyzing call {i+1} of {total} — {label}")
+
+    results = analyze_batch(transcripts, cb)
+    progress.empty()
+
+    st.session_state["results_df"] = pd.DataFrame(results)
+    st.session_state["stage"] = "dashboard"
+    st.session_state["_pending_transcripts"] = None
+    st.rerun()
+
+# ──────────────────────────────────────────────────────────────
+# DASHBOARD
+# ──────────────────────────────────────────────────────────────
+def render_dashboard():
+    df_all = st.session_state["results_df"]
+    total_fetched = st.session_state["total_fetched"]
+    df = render_sidebar_dashboard(df_all)
+
+    # Page header
+    total_shown = len(df)
+    sampling_note = ""
+    if total_shown < len(df_all):
+        sampling_note = f" · Filtered to {total_shown} of {len(df_all)}"
+    elif len(df_all) < total_fetched:
+        sampling_note = f" · Showing {len(df_all)} of {total_fetched}"
+
     st.markdown(f"""
-    <div style="padding:3rem 0 1rem 0; text-align:center;">
-        <div style="font-size:1.3rem; font-weight:700; color:{C['text_primary']}; margin-bottom:0.4rem;">Analyzing calls…</div>
-        <div style="font-size:0.85rem; color:{C['text_muted']};">Groq LLaMA 3.3 is reading each transcript and extracting insights.</div>
+    <div style="padding:1.8rem 0 2rem 0;border-bottom:1px solid #e2e8f0;margin-bottom:2rem;">
+      <div style="font-family:'Instrument Serif',serif;font-size:2.2rem;color:#0f172a;letter-spacing:-0.02em;line-height:1;">
+        Close<span style="color:#1f6feb;">Call</span>
+      </div>
+      <div style="font-size:0.78rem;color:#94a3b8;margin-top:0.35rem;font-weight:500;">
+        {st.session_state['source_label']}{sampling_note}
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
-    _, col, _ = st.columns([1, 4, 1])
-    with col:
-        progress = st.progress(0, text="Starting…")
+    render_kpis(df, total_fetched)
+    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+    render_charts(df)
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+    render_table_section(df)
 
-    results = analyze_batch(transcripts, progress)
-    progress.empty()
-    st.session_state.results_df = pd.DataFrame(results)
-    st.session_state.state = "dashboard"
-    st.rerun()
-
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 # KPI ROW
-# ─────────────────────────────────────────────────────────────────────────────
-def render_kpis(df: pd.DataFrame):
-    total = len(df)
-    total_avail = st.session_state.total_available
-    pos_pct  = round(len(df[df["sentiment"]=="Positive"]) / total * 100) if total else 0
-    neg_pct  = round(len(df[df["sentiment"]=="Negative"]) / total * 100) if total else 0
-    hot      = len(df[df["lead_type"]=="Hot"])
-
-    sampling = f"Showing {total} of {total_avail}" if total < total_avail else f"{total} calls processed"
+# ──────────────────────────────────────────────────────────────
+def render_kpis(df, total_fetched):
+    n = len(df)
+    pos  = len(df[df["sentiment"] == "Positive"])
+    neg  = len(df[df["sentiment"] == "Negative"])
+    hot  = len(df[df["lead_type"] == "Hot"])
+    pos_pct = round(pos/n*100) if n else 0
+    neg_pct = round(neg/n*100) if n else 0
+    sampled_note = f"of {total_fetched} total" if n < total_fetched else "all calls"
 
     k1, k2, k3, k4 = st.columns(4)
-    for col, label, value, sub in [
-        (k1, "Calls Analyzed",     str(total),   sampling),
-        (k2, "Positive Sentiment", f"{pos_pct}%", f"{len(df[df['sentiment']=='Positive'])} calls"),
-        (k3, "Negative Sentiment", f"{neg_pct}%", f"{len(df[df['sentiment']=='Negative'])} calls"),
-        (k4, "Hot Leads",          str(hot),      "Sale likely"),
+    for col, accent, label, big, sub in [
+        (k1, "#1f6feb", "Calls Analyzed",     str(n),         sampled_note),
+        (k2, "#059669", "Positive Sentiment", f"{pos_pct}%",  f"{pos} calls"),
+        (k3, "#dc2626", "Negative Sentiment", f"{neg_pct}%",  f"{neg} calls"),
+        (k4, "#f59e0b", "Hot Leads",          str(hot),       "high intent"),
     ]:
         with col:
             st.markdown(f"""
-            <div class="kpi-card">
-                <div class="kpi-label">{label}</div>
-                <div class="kpi-value">{value}</div>
-                <div class="kpi-sub">{sub}</div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-top:3px solid {accent};
+              border-radius:14px;padding:1.4rem 1.6rem;">
+              <div style="font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;
+                letter-spacing:0.1em;margin-bottom:0.5rem;">{label}</div>
+              <div style="font-size:2.4rem;font-weight:800;color:#0f172a;line-height:1;
+                letter-spacing:-0.03em;">{big}</div>
+              <div style="font-size:0.72rem;color:#94a3b8;margin-top:0.35rem;">{sub}</div>
             </div>
             """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 # CHARTS
-# ─────────────────────────────────────────────────────────────────────────────
-def render_charts(df: pd.DataFrame):
+# ──────────────────────────────────────────────────────────────
+def _chart_base():
+    return dict(
+        plot_bgcolor="#fff",
+        paper_bgcolor="#fff",
+        font=dict(family="Geist, sans-serif", color="#64748b", size=11),
+        margin=dict(l=8, r=8, t=36, b=8),
+        xaxis=dict(gridcolor="#f1f5f9", zerolinecolor="#f1f5f9", title=None),
+        yaxis=dict(gridcolor="#f1f5f9", zerolinecolor="#f1f5f9", title=None),
+    )
+
+def render_charts(df):
     c1, c2 = st.columns(2)
 
     with c1:
-        st.markdown('<div class="sec-head">Sentiment Distribution</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:1.4rem 1.6rem 0.6rem 1.6rem;margin-bottom:0;">
+          <div style="font-size:0.85rem;font-weight:700;color:#0f172a;margin-bottom:0.1rem;">Sentiment Distribution</div>
+          <div style="font-size:0.73rem;color:#94a3b8;margin-bottom:0.8rem;">Across all analyzed calls</div>
+        </div>
+        """, unsafe_allow_html=True)
         sent = df["sentiment"].value_counts().reset_index()
-        sent.columns = ["Sentiment", "Calls"]
-        cmap = {"Positive": C["positive"], "Negative": C["negative"],
-                "Mixed": C["mixed"], "Neutral": C["text_muted"]}
-        fig = px.bar(sent, x="Sentiment", y="Calls", color="Sentiment",
-                     color_discrete_map=cmap, text="Calls")
-        fig.update_traces(textposition="outside", marker_line_width=0)
-        fig.update_layout(showlegend=False, **chart_layout())
+        sent.columns = ["Sentiment", "Count"]
+        cmap = {"Positive":"#059669","Negative":"#dc2626","Mixed":"#d97706","Neutral":"#94a3b8"}
+        fig = px.bar(sent, x="Sentiment", y="Count", color="Sentiment",
+                     color_discrete_map=cmap, text="Count")
+        fig.update_traces(textposition="outside", marker_line_width=0, textfont_size=13)
+        fig.update_layout(showlegend=False, **_chart_base())
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     with c2:
-        st.markdown('<div class="sec-head">Top Objections</div>', unsafe_allow_html=True)
-        obj = df[
-            df["top_objection"].notna() &
-            ~df["top_objection"].str.lower().isin(["none","unknown","—"])
-        ]["top_objection"].apply(lambda x: x[:48]+"…" if len(x)>48 else x)
-        if len(obj):
-            oc = obj.value_counts().head(7).reset_index()
-            oc.columns = ["Objection", "Count"]
-            fig2 = px.bar(oc, x="Count", y="Objection", orientation="h",
-                          color="Count",
-                          color_continuous_scale=[C["accent_light"], C["accent"]],
-                          text="Count")
-            fig2.update_traces(textposition="outside", marker_line_width=0)
-            fig2.update_layout(showlegend=False, coloraxis_showscale=False,
-                               yaxis=dict(autorange="reversed", gridcolor=C["border"], title=None),
-                               xaxis=dict(gridcolor=C["border"], title=None),
-                               **{k:v for k,v in chart_layout().items() if k not in ("xaxis","yaxis")})
-            st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
-        else:
-            st.info("No objections detected in current selection.")
+        st.markdown("""
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:1.4rem 1.6rem 0.6rem 1.6rem;">
+          <div style="font-size:0.85rem;font-weight:700;color:#0f172a;margin-bottom:0.1rem;">Lead Quality Breakdown</div>
+          <div style="font-size:0.73rem;color:#94a3b8;margin-bottom:0.8rem;">Hot / Warm / Cold distribution</div>
+        </div>
+        """, unsafe_allow_html=True)
+        lead = df["lead_type"].value_counts().reset_index()
+        lead.columns = ["Lead", "Count"]
+        lmap = {"Hot":"#dc2626","Warm":"#d97706","Cold":"#2563eb"}
+        fig2 = px.pie(lead, names="Lead", values="Count", color="Lead",
+                      color_discrete_map=lmap, hole=0.55)
+        fig2.update_traces(textfont_size=12, textinfo="percent+label",
+                           marker=dict(line=dict(color="#fff", width=2)))
+        fig2.update_layout(showlegend=True, **_chart_base())
+        st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CALLS TABLE
-# ─────────────────────────────────────────────────────────────────────────────
-def render_calls_table(df: pd.DataFrame):
-    st.markdown("---")
-    st.markdown('<div class="sec-head">All Calls</div>', unsafe_allow_html=True)
+# ──────────────────────────────────────────────────────────────
+# TABLE + DETAIL
+# ──────────────────────────────────────────────────────────────
+def render_table_section(df):
+    st.markdown("""
+    <div style="font-size:0.85rem;font-weight:700;color:#0f172a;margin-bottom:0.8rem;">All Calls</div>
+    """, unsafe_allow_html=True)
 
-    s1, s2 = st.columns([4, 2])
-    with s1:
-        search = st.text_input("", placeholder="🔍  Search by company, issue, objection…", label_visibility="collapsed", key="tbl_search")
+    s_col, _ = st.columns([5, 3])
+    with s_col:
+        search = st.text_input("", placeholder="🔍  Search by company, issue, objection…",
+                               label_visibility="collapsed", key="search")
 
-    filtered = df.copy()
+    fdf = df.copy()
     if search:
-        mask = (
-            filtered["id"].astype(str).str.contains(search, case=False, na=False) |
-            filtered["company"].astype(str).str.contains(search, case=False, na=False) |
-            filtered["key_issue"].astype(str).str.contains(search, case=False, na=False) |
-            filtered["top_objection"].astype(str).str.contains(search, case=False, na=False)
-        )
-        filtered = filtered[mask]
+        m = (fdf["id"].str.contains(search, case=False, na=False) |
+             fdf["company"].str.contains(search, case=False, na=False) |
+             fdf["key_issue"].str.contains(search, case=False, na=False) |
+             fdf["top_objection"].str.contains(search, case=False, na=False))
+        fdf = fdf[m]
 
-    st.markdown(f'<div style="font-size:0.76rem;color:{C["text_muted"]};margin-bottom:0.7rem;">{len(filtered)} of {len(df)} calls</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:0.74rem;color:#94a3b8;margin-bottom:0.7rem;">{len(fdf)} of {len(df)} calls</div>',
+                unsafe_allow_html=True)
 
-    if filtered.empty:
+    if fdf.empty:
         st.info("No calls match your search.")
         return
 
-    rows_html = ""
-    for _, row in filtered.head(60).iterrows():
-        obj   = str(row.get("top_objection","—"))
-        nstep = str(row.get("next_step","—"))
-        rows_html += f"""
-        <tr>
-            <td style="font-weight:600;color:{C['text_primary']};">{row['id']}</td>
-            <td style="color:{C['text_secondary']};">{row['company']}</td>
-            <td>{sent_tag(row.get('sentiment','—'))}</td>
-            <td>{lead_tag(row.get('lead_type','—'))}</td>
-            <td style="color:{C['text_secondary']};max-width:200px;">{obj[:58]}{"…" if len(obj)>58 else ""}</td>
-            <td style="color:{C['text_secondary']};max-width:180px;">{nstep[:52]}{"…" if len(nstep)>52 else ""}</td>
+    rows = ""
+    for _, r in fdf.head(60).iterrows():
+        obj = str(r.get("top_objection","—"))
+        rows += f"""
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:12px 16px;font-weight:600;color:#0f172a;white-space:nowrap;">{r['id']}</td>
+          <td style="padding:12px 16px;color:#475569;">{r['company']}</td>
+          <td style="padding:12px 16px;">{sent_pill(r.get('sentiment','—'))}</td>
+          <td style="padding:12px 16px;">{lead_pill(r.get('lead_type','—'))}</td>
+          <td style="padding:12px 16px;color:#475569;max-width:260px;line-height:1.4;">{obj}</td>
+          <td style="padding:12px 16px;color:#475569;max-width:240px;line-height:1.4;">{str(r.get('next_step','—'))}</td>
         </tr>"""
 
     st.markdown(f"""
-    <div class="calls-table">
-        <table>
-            <thead><tr>
-                <th>Call ID</th><th>Company</th><th>Sentiment</th>
-                <th>Lead</th><th>Key Objection</th><th>Next Step</th>
-            </tr></thead>
-            <tbody>{rows_html}</tbody>
-        </table>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin-bottom:1.5rem;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.83rem;">
+        <thead>
+          <tr style="background:#f8f9fb;border-bottom:1px solid #e2e8f0;">
+            <th style="padding:10px 16px;text-align:left;font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;">Call ID</th>
+            <th style="padding:10px 16px;text-align:left;font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Company</th>
+            <th style="padding:10px 16px;text-align:left;font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Sentiment</th>
+            <th style="padding:10px 16px;text-align:left;font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Lead</th>
+            <th style="padding:10px 16px;text-align:left;font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Key Objection</th>
+            <th style="padding:10px 16px;text-align:left;font-size:0.68rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">Next Step</th>
+          </tr>
+        </thead>
+        <tbody>{rows}</tbody>
+      </table>
     </div>
     """, unsafe_allow_html=True)
 
-    if len(filtered) > 60:
-        st.caption(f"Showing first 60 of {len(filtered)} results.")
+    if len(fdf) > 60:
+        st.caption(f"Showing first 60 of {len(fdf)} results.")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    render_detail(filtered)
+    render_detail(fdf)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DETAIL VIEW
-# ─────────────────────────────────────────────────────────────────────────────
-def render_detail(df: pd.DataFrame):
-    st.markdown('<div class="sec-head">Call Detail</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="sec-sub">Select any call to view transcript, insights, actions and follow-up email.</div>', unsafe_allow_html=True)
+# ──────────────────────────────────────────────────────────────
+# CALL DETAIL
+# ──────────────────────────────────────────────────────────────
+def render_detail(df):
+    st.markdown("""
+    <div style="height:0.5rem;"></div>
+    <div style="font-size:0.85rem;font-weight:700;color:#0f172a;margin-bottom:0.2rem;">Call Detail</div>
+    <div style="font-size:0.74rem;color:#94a3b8;margin-bottom:0.8rem;">Select a call for full transcript, AI analysis, actions, and follow-up email.</div>
+    """, unsafe_allow_html=True)
 
-    selected = st.selectbox("", df["id"].tolist(), label_visibility="collapsed", key="detail_sel")
-    row = df[df["id"] == selected].iloc[0]
+    sel = st.selectbox("", df["id"].tolist(), label_visibility="collapsed", key="detail_sel")
+    r = df[df["id"] == sel].iloc[0]
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Sentiment",  row.get("sentiment","—"))
-    m2.metric("Lead Type",  row.get("lead_type","—"))
-    m3.metric("Resolution", row.get("resolution_status","—"))
-    m4.metric("Rep Score",  f"{row.get('rep_score','—')}/5")
+    # Meta chips row
+    def chip(label, val, fg, bg):
+        return f"""<div style="background:{bg};border-radius:10px;padding:0.9rem 1.2rem;">
+          <div style="font-size:0.65rem;font-weight:700;color:{fg}99;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:0.25rem;">{label}</div>
+          <div style="font-size:0.9rem;font-weight:700;color:{fg};">{val}</div>
+        </div>"""
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    t1, t2, t3, t4 = st.tabs(["Transcript", "AI Insights", "Recommended Actions", "Follow-up Email"])
+    sent_fg, sent_bg = SENT_COLORS.get(r.get("sentiment","Neutral"), ("#475569","#f1f5f9"))
+    lead_fg, lead_bg = LEAD_COLORS.get(r.get("lead_type","Cold"), ("#2563eb","#eff6ff"))
 
+    c1,c2,c3,c4 = st.columns(4)
+    with c1: st.markdown(chip("Sentiment",  r.get("sentiment","—"),         sent_fg, sent_bg), unsafe_allow_html=True)
+    with c2: st.markdown(chip("Lead Type",  r.get("lead_type","—"),          lead_fg, lead_bg), unsafe_allow_html=True)
+    with c3: st.markdown(chip("Resolution", r.get("resolution_status","—"), "#0f172a","#f8f9fb"), unsafe_allow_html=True)
+    with c4: st.markdown(chip("Rep Score",  f"{r.get('rep_score','—')}/5",  "#0f172a","#f8f9fb"), unsafe_allow_html=True)
+
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+    t1, t2, t3, t4 = st.tabs(["📄 Transcript", "🧠 AI Insights", "✅ Actions", "✉️ Follow-up Email"])
+
+    # ── Transcript
     with t1:
-        content = str(row.get("content","No transcript."))
-        display = content.replace("**Sales Rep**","🎙 Sales Rep").replace("**Customer**","👤 Customer")
-        st.markdown(f'<div class="transcript-box">{display}</div>', unsafe_allow_html=True)
+        content = str(r.get("content","No transcript available."))
+        display = (content
+                   .replace("**Sales Rep**","<strong style='color:#1f6feb;'>🎙 Sales Rep</strong>")
+                   .replace("**Customer**","<strong style='color:#059669;'>👤 Customer</strong>")
+                   .replace("\n","<br>"))
+        st.markdown(f"""
+        <div style="background:#f8f9fb;border:1px solid #e2e8f0;border-radius:12px;
+          padding:1.4rem 1.8rem;font-size:0.83rem;color:#475569;line-height:2;
+          max-height:380px;overflow-y:auto;">{display}</div>
+        """, unsafe_allow_html=True)
 
+    # ── AI Insights
     with t2:
-        i1, i2 = st.columns(2)
-        with i1:
-            for label, field in [("Summary","summary"),("Sentiment Arc","sentiment_arc"),("Key Issue","key_issue")]:
-                st.markdown(f'<div class="dp"><div class="dp-label">{label}</div><div class="dp-value">{row.get(field,"—")}</div></div>', unsafe_allow_html=True)
-        with i2:
-            for label, field in [("Top Objection","top_objection"),("Sales Outcome","outcome")]:
-                st.markdown(f'<div class="dp"><div class="dp-label">{label}</div><div class="dp-value">{row.get(field,"—")}</div></div>', unsafe_allow_html=True)
-            rep_score = int(row.get("rep_score", 0)) if str(row.get("rep_score","0")).isdigit() else 0
-            st.markdown(f"""
-            <div class="dp">
-                <div class="dp-label">Rep Performance</div>
-                <div style="margin-bottom:0.4rem;">{score_html(rep_score)}</div>
-                <div class="dp-value">{row.get("rep_score_reason","—")}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        q = row.get("standout_quote","")
-        if q and q != "—":
-            st.markdown(f'<div class="quote-bar">"{q}"</div>', unsafe_allow_html=True)
+        ia, ib = st.columns(2)
+        def dp(label, val):
+            return f"""<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+              padding:1.1rem 1.4rem;margin-bottom:0.75rem;">
+              <div style="font-size:0.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;
+                letter-spacing:0.1em;margin-bottom:0.35rem;">{label}</div>
+              <div style="font-size:0.87rem;color:#0f172a;line-height:1.6;">{val}</div>
+            </div>"""
 
-    with t3:
-        ns = row.get("next_step","")
-        if ns:
+        with ia:
+            st.markdown(dp("Summary",       r.get("summary","—")), unsafe_allow_html=True)
+            st.markdown(dp("Sentiment Arc", r.get("sentiment_arc","—")), unsafe_allow_html=True)
+            st.markdown(dp("Key Issue",     r.get("key_issue","—")), unsafe_allow_html=True)
+        with ib:
+            st.markdown(dp("Top Objection", r.get("top_objection","—")), unsafe_allow_html=True)
+            st.markdown(dp("Sales Outcome", r.get("outcome","—")), unsafe_allow_html=True)
+            rep_score = r.get("rep_score", 0)
+            try: rep_score = int(rep_score)
+            except: rep_score = 0
             st.markdown(f"""
-            <div class="dp" style="border-left:3px solid {C['accent']};">
-                <div class="dp-label">Immediate Next Step</div>
-                <div class="dp-value" style="font-weight:700;color:{C['accent']};">{ns}</div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+              padding:1.1rem 1.4rem;margin-bottom:0.75rem;">
+              <div style="font-size:0.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;
+                letter-spacing:0.1em;margin-bottom:0.4rem;">Rep Performance</div>
+              <div style="margin-bottom:0.4rem;">{score_dots(rep_score)}</div>
+              <div style="font-size:0.87rem;color:#0f172a;line-height:1.6;">{r.get('rep_score_reason','—')}</div>
             </div>
             """, unsafe_allow_html=True)
-        actions = row.get("recommended_actions", [])
+        q = str(r.get("standout_quote",""))
+        if q and q != "—":
+            st.markdown(f"""
+            <div style="border-left:3px solid #1f6feb;padding:0.7rem 1rem;background:#f0f7ff;
+              border-radius:0 10px 10px 0;font-style:italic;color:#475569;font-size:0.86rem;margin-top:0.5rem;">
+              "{q}"
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Actions
+    with t3:
+        ns = str(r.get("next_step",""))
+        if ns and ns != "—":
+            st.markdown(f"""
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #1f6feb;
+              border-radius:0 12px 12px 0;padding:1.1rem 1.4rem;margin-bottom:1rem;">
+              <div style="font-size:0.65rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;
+                letter-spacing:0.1em;margin-bottom:0.3rem;">Immediate Next Step</div>
+              <div style="font-size:0.9rem;font-weight:600;color:#1e3a8a;line-height:1.6;">{ns}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        actions = r.get("recommended_actions", [])
         if isinstance(actions, str):
             import json as _j
             try: actions = _j.loads(actions)
             except: actions = [actions]
         if actions:
-            items = "".join(f'<div class="action-row"><div class="action-num">{i}</div><div>{a}</div></div>' for i,a in enumerate(actions,1))
-            st.markdown(f'<div class="dp"><div class="dp-label">Action Items</div>{items}</div>', unsafe_allow_html=True)
+            items_html = ""
+            for i, a in enumerate(actions, 1):
+                items_html += f"""
+                <div style="display:flex;gap:0.8rem;align-items:flex-start;padding:0.8rem 0;
+                  border-bottom:1px solid #f1f5f9;font-size:0.86rem;color:#0f172a;line-height:1.5;">
+                  <div style="min-width:24px;height:24px;background:#eff6ff;color:#1f6feb;
+                    font-weight:700;font-size:0.72rem;border-radius:50%;display:flex;
+                    align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">{i}</div>
+                  <div>{a}</div>
+                </div>"""
+            st.markdown(f"""
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+              padding:0.5rem 1.2rem 0.5rem 1.2rem;">
+              <div style="font-size:0.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;
+                letter-spacing:0.1em;margin-bottom:0.1rem;padding-top:0.7rem;">Recommended Actions</div>
+              {items_html}
+            </div>
+            """, unsafe_allow_html=True)
 
+    # ── Email
     with t4:
-        email_key = f"email_{selected}"
-        if email_key not in st.session_state:
-            st.session_state[email_key] = None
+        ek = f"email_{sel}"
+        if ek not in st.session_state:
+            st.session_state[ek] = None
 
-        if st.session_state[email_key] is None:
-            st.markdown(f'<div style="font-size:0.84rem;color:{C["text_muted"]};margin-bottom:1rem;">Generate a personalized follow-up email based on this call.</div>', unsafe_allow_html=True)
+        if st.session_state[ek] is None:
+            st.markdown(f"""
+            <div style="font-size:0.84rem;color:#64748b;margin-bottom:1.2rem;line-height:1.6;">
+              Generate a personalized follow-up email addressed to the customer by name,
+              referencing their issue, order details, and agreed next steps.
+            </div>
+            """, unsafe_allow_html=True)
             _, bc, _ = st.columns([2,3,2])
             with bc:
-                if st.button("Generate Follow-up Email", key=f"gen_{selected}"):
-                    with st.spinner("Writing email…"):
+                if st.button("Generate Follow-up Email", key=f"gen_{sel}"):
+                    with st.spinner("Writing personalized email…"):
                         email = generate_email(
-                            summary=str(row.get("summary","")),
-                            key_issue=str(row.get("key_issue","")),
-                            next_step=str(row.get("next_step","")),
-                            sentiment=str(row.get("sentiment","")),
-                            transcript_excerpt=str(row.get("content",""))[:800],
+                            customer_name=str(r.get("customer_name","Customer")),
+                            summary=str(r.get("summary","")),
+                            key_issue=str(r.get("key_issue","")),
+                            resolution_status=str(r.get("resolution_status","")),
+                            next_step=str(r.get("next_step","")),
+                            order_or_ref=str(r.get("order_or_ref","N/A")),
+                            sentiment=str(r.get("sentiment","")),
+                            call_type=str(r.get("call_type","")),
                         )
-                    st.session_state[email_key] = email
+                    st.session_state[ek] = email
                     st.rerun()
         else:
-            st.markdown(f'<div class="email-box">{st.session_state[email_key]}</div>', unsafe_allow_html=True)
-            _, rc, _ = st.columns([3,2,3])
-            with rc:
-                if st.button("Regenerate", key=f"regen_{selected}"):
-                    st.session_state[email_key] = None
+            st.markdown(f"""
+            <div style="background:#f8f9fb;border:1px solid #e2e8f0;border-radius:12px;
+              padding:1.4rem 1.8rem;font-size:0.88rem;color:#0f172a;line-height:1.9;
+              white-space:pre-wrap;">{st.session_state[ek]}</div>
+            """, unsafe_allow_html=True)
+            ca, cb, _ = st.columns([3,2,4])
+            with ca:
+                st.code(st.session_state[ek], language=None)
+            with cb:
+                if st.button("Regenerate", key=f"regen_{sel}"):
+                    st.session_state[ek] = None
                     st.rerun()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DASHBOARD
-# ─────────────────────────────────────────────────────────────────────────────
-def render_dashboard():
-    df_all = st.session_state.results_df
-    df = render_sidebar(df_all)   # sidebar renders filters and returns filtered df
-
-    st.markdown(f"""
-    <div style="padding:1.5rem 0 2rem 0; border-bottom:1px solid {C['border']}; margin-bottom:2rem;">
-        <div class="logo">Close<span>Call</span></div>
-        <div style="font-size:0.78rem;color:{C['text_muted']};margin-top:0.3rem;">{st.session_state.source_label}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    render_kpis(df)
-    st.markdown("<br>", unsafe_allow_html=True)
-    render_charts(df)
-    render_calls_table(df)
-
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 # ROUTER
-# ─────────────────────────────────────────────────────────────────────────────
-state = st.session_state.state
-
-if state == "empty":
-    render_entry()
-elif state == "processing":
-    render_processing()
-elif state == "dashboard":
-    if st.session_state.results_df is not None:
-        render_dashboard()
-    else:
-        st.session_state.state = "empty"
-        st.rerun()
+# ──────────────────────────────────────────────────────────────
+stage = st.session_state["stage"]
+if   stage == "home":      render_home()
+elif stage == "loading":   render_loading()
+elif stage == "dashboard": render_dashboard()
+else:
+    st.session_state["stage"] = "home"
+    st.rerun()
+ENDOFFILE
