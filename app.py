@@ -2,7 +2,7 @@ import json
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from data_loader import load_amazon_transcripts, load_csv_transcripts
+from data_loader import load_sample_transcripts, load_csv_transcripts
 from analyzer import analyze_batch, generate_email
 
 st.set_page_config(
