@@ -74,3 +74,7 @@ def load_csv_transcripts(uploaded_file) -> list[dict]:
         if col not in df.columns:
             df[col] = ""
     return df.to_dict("records")
+
+def load_sample_transcripts() -> list[dict]:
+    """Alias for backward compatibility"""
+    return load_amazon_transcripts()
