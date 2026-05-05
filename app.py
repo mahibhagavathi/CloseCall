@@ -11,7 +11,7 @@ st.set_page_config(page_title="CloseCall AI", layout="wide")
 
 XLSX_PATH = "amazon_india_calls.xlsx"
 
-client = OpenAI()
+client = Groq()
 
 # =========================
 # COLUMN MAP
