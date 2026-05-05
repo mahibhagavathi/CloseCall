@@ -1,104 +1,76 @@
-import requests
+"""
+data_loader.py
+Loads the Amazon India call records from the bundled XLSX file.
+Returns a list of dicts — one per call — ready for CloseCall's analyzer.
+"""
 import pandas as pd
 import streamlit as st
-import io
 
-HF_API_URL = "https://huggingface.co/api/datasets/gwenshap/sales-transcripts/tree/main/data/transcripts"
-HF_RAW_BASE = "https://huggingface.co/datasets/gwenshap/sales-transcripts/raw/main/data/transcripts"
+XLSX_PATH = "amazon_india_calls.xlsx"
+
+# Map the Excel columns → internal field names used by the rest of the app
+COL_MAP = {
+    "Call ID":                 "id",
+    "Timestamp":               "timestamp",
+    "Duration (sec)":          "duration_sec",
+    "Hold Time (sec)":         "hold_sec",
+    "Channel":                 "channel",
+    "Call Type":               "call_type_raw",
+    "Customer ID":             "customer_id",
+    "Customer Name":           "customer_name",
+    "Phone Number":            "phone",
+    "City":                    "city",
+    "State":                   "state",
+    "Country":                 "country",
+    "Customer Service Agent":  "agent_name",
+    "Employee ID":             "employee_id",
+    "Agent Experience (Yrs)":  "agent_exp_yrs",
+    "Product ID":              "product_id",
+    "Product Name":            "product_name",
+    "Product Category":        "product_category",
+    "Sentiment":               "sentiment_raw",
+    "Resolution":              "resolution_raw",
+    "First Call Resolution":   "fcr",
+    "Transfers":               "transfers",
+    "CSAT Score (1-5)":        "csat",
+    "Transcript":              "content",
+}
 
 
 @st.cache_data(show_spinner=False)
-def fetch_file_list() -> list[str]:
-    """Fetch all transcript filenames from HuggingFace (handles pagination)."""
-    files = []
-    url = HF_API_URL
-    while url:
-        resp = requests.get(url, timeout=20)
-        resp.raise_for_status()
-        data = resp.json()
-        for item in data:
-            path = item.get("path", "")
-            if path.endswith("_transcript.txt"):
-                files.append(path.split("/")[-1])
-        # HuggingFace may paginate via Link header
-        link = resp.headers.get("Link", "")
-        if 'rel="next"' in link:
-            import re
-            match = re.search(r'<([^>]+)>;\s*rel="next"', link)
-            url = match.group(1) if match else None
-        else:
-            url = None
-    return files
+def load_amazon_transcripts() -> list[dict]:
+    df = pd.read_excel(XLSX_PATH, sheet_name="Call Records")
+    df.rename(columns=COL_MAP, inplace=True)
 
+    records = []
+    for _, row in df.iterrows():
+        rec = {k: (row[k] if pd.notna(row.get(k)) else "") for k in COL_MAP.values()}
+        # Normalise numeric fields
+        for num_col in ("duration_sec", "hold_sec", "agent_exp_yrs", "transfers", "csat"):
+            try:
+                rec[num_col] = int(rec[num_col])
+            except (ValueError, TypeError):
+                rec[num_col] = 0
+        # Build a human-readable duration string
+        d = rec["duration_sec"]
+        rec["duration_label"] = f"{d // 60}m {d % 60}s" if d >= 60 else f"{d}s"
+        records.append(rec)
 
-@st.cache_data(show_spinner=False)
-def fetch_transcript(filename: str) -> str:
-    url = f"{HF_RAW_BASE}/{filename}"
-    resp = requests.get(url, timeout=15)
-    resp.raise_for_status()
-    return resp.text
-
-
-def parse_meta(filename: str) -> tuple[str, str]:
-    """Return (company, call_index) from filename like modamart__0_transcript.txt"""
-    base = filename.replace("_transcript.txt", "")
-    parts = base.split("__")
-    company = parts[0].replace("-", " ").title() if parts else "Unknown"
-    idx = parts[1] if len(parts) > 1 else "0"
-    return company, idx
-
-
-def load_sample_transcripts() -> list[dict]:
-    """Load all transcripts from HuggingFace. Returns list of dicts."""
-    file_list = fetch_file_list()
-    transcripts = []
-    for fname in file_list:
-        company, idx = parse_meta(fname)
-        try:
-            content = fetch_transcript(fname)
-        except Exception as e:
-            content = f"[Load error: {e}]"
-        transcripts.append({
-            "filename": fname,
-            "company": company,
-            "index": idx,
-            "content": content,
-            "id": f"{company} #{idx}",
-            "source": "sample",
-        })
-    return transcripts
+    return records
 
 
 def load_csv_transcripts(uploaded_file) -> list[dict]:
-    """Parse a user-uploaded CSV into transcript dicts."""
+    """Fallback: accept a user-uploaded CSV with at least a 'transcript'/'content' column."""
     df = pd.read_csv(uploaded_file)
     df.columns = [c.strip().lower() for c in df.columns]
-
-    # Find transcript column
-    candidate_cols = ["transcript", "content", "text", "conversation", "call", "dialogue", "body"]
-    transcript_col = next((c for c in candidate_cols if c in df.columns), None)
-    if transcript_col is None:
-        # Fall back to largest text column
-        text_cols = df.select_dtypes(include="object").columns.tolist()
-        if not text_cols:
-            raise ValueError("No text columns found in CSV.")
-        transcript_col = max(text_cols, key=lambda c: df[c].astype(str).str.len().mean())
-
-    # Find optional id/company columns
-    id_col = next((c for c in ["id", "call_id", "call id"] if c in df.columns), None)
-    company_col = next((c for c in ["company", "org", "client"] if c in df.columns), None)
-
-    transcripts = []
-    for i, row in df.iterrows():
-        content = str(row[transcript_col])
-        call_id = str(row[id_col]) if id_col else f"Call #{i+1}"
-        company = str(row[company_col]) if company_col else "Uploaded"
-        transcripts.append({
-            "filename": call_id,
-            "company": company,
-            "index": str(i),
-            "content": content,
-            "id": call_id,
-            "source": "upload",
-        })
-    return transcripts
+    if "transcript" in df.columns:
+        df.rename(columns={"transcript": "content"}, inplace=True)
+    if "content" not in df.columns:
+        raise ValueError("CSV must contain a 'transcript' or 'content' column.")
+    if "id" not in df.columns:
+        df["id"] = [f"CALL-{i+1:04d}" for i in range(len(df))]
+    for col in ("customer_name", "company", "city", "state", "product_category",
+                "channel", "call_type_raw", "csat", "duration_label"):
+        if col not in df.columns:
+            df[col] = ""
+    return df.to_dict("records")
