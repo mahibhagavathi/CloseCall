@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import time
 import plotly.express as px
+from openai import OpenAI
 
 # =========================
 # CONFIG
@@ -10,6 +11,8 @@ import plotly.express as px
 st.set_page_config(page_title="CloseCall AI", layout="wide")
 
 XLSX_PATH = "amazon_india_calls.xlsx"
+
+client = OpenAI()
 
 # =========================
 # COLUMN MAP
@@ -51,37 +54,37 @@ def load_data():
         st.stop()
 
     df = pd.read_excel(XLSX_PATH)
-
-    # rename columns
     df = df.rename(columns=COL_MAP)
 
-    # normalize sentiment
-    df["sentiment"] = (
-        df["sentiment_raw"]
-        .astype(str)
-        .str.strip()
-        .str.title()
-    )
+    df["sentiment"] = df["sentiment_raw"].astype(str).str.strip().str.title()
+    df["call_type"] = df["call_type_raw"].astype(str).str.strip().str.title()
 
-    # normalize call type
-    df["call_type"] = (
-        df["call_type_raw"]
-        .astype(str)
-        .str.strip()
-        .str.title()
-    )
-
-    # rep score (proxy using CSAT if exists)
-    if "csat" in df.columns:
-        df["rep_score"] = df["csat"]
-    else:
-        df["rep_score"] = 3
+    df["rep_score"] = df["csat"] if "csat" in df else 3
 
     return df
 
 
 # =========================
-# LOADING SCREEN
+# GPT SUMMARY
+# =========================
+@st.cache_data(show_spinner=False)
+def generate_summary(text):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": "Summarize customer service calls in 1-2 concise lines."},
+                {"role": "user", "content": text[:1000]}
+            ],
+            temperature=0.3
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "Summary unavailable"
+
+
+# =========================
+# LOADING
 # =========================
 def render_loading():
     st.title("⚡ Analyzing Calls...")
@@ -92,8 +95,8 @@ def render_loading():
     steps = [
         "Reading transcripts",
         "Cleaning data",
-        "Analyzing sentiment",
-        "Generating dashboard"
+        "Running AI summaries",
+        "Building dashboard"
     ]
 
     for i, step in enumerate(steps):
@@ -103,17 +106,19 @@ def render_loading():
 
     df = load_data()
 
+    # generate summaries (limit to avoid cost explosion)
+    df["summary"] = df["content"].astype(str).apply(generate_summary)
+
     st.session_state["df"] = df
     st.session_state["stage"] = "dashboard"
     st.rerun()
 
 
 # =========================
-# KPI SECTION
+# KPIs
 # =========================
 def render_kpis(df):
     total = len(df)
-
     pos = len(df[df["sentiment"] == "Positive"])
     neg = len(df[df["sentiment"] == "Negative"])
 
@@ -140,24 +145,67 @@ def render_charts(df):
         sent = df["sentiment"].value_counts().reset_index()
         sent.columns = ["Sentiment", "Count"]
 
-        fig1 = px.pie(
-            sent,
-            names="Sentiment",
-            values="Count",
-            title="Sentiment Distribution"
-        )
+        fig1 = px.pie(sent, names="Sentiment", values="Count", title="Sentiment Distribution")
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
         agent_perf = df.groupby("agent_name")["rep_score"].mean().reset_index()
 
-        fig2 = px.bar(
-            agent_perf,
-            x="agent_name",
-            y="rep_score",
-            title="Agent Performance"
-        )
+        fig2 = px.bar(agent_perf, x="agent_name", y="rep_score", title="Agent Performance")
         st.plotly_chart(fig2, use_container_width=True)
+
+
+# =========================
+# INSIGHTS + EMAIL
+# =========================
+def render_insights(df):
+    st.subheader("🧠 AI Insights & Actions")
+
+    if df.empty:
+        st.info("No data")
+        return
+
+    total = len(df)
+    negative_df = df[df["sentiment"] == "Negative"]
+
+    top_issue = negative_df["product_category"].value_counts().idxmax() if not negative_df.empty else "None"
+    worst_agent = df.groupby("agent_name")["rep_score"].mean().sort_values().index[0]
+
+    st.markdown("### 🚨 Key Observations")
+    st.markdown(f"- {len(negative_df)} out of {total} calls are negative")
+    st.markdown(f"- Most complaints in **{top_issue}**")
+    st.markdown(f"- Lowest performer: **{worst_agent}**")
+
+    st.markdown("---")
+
+    st.markdown("### 🎯 Next Actions")
+    st.markdown(f"""
+- Fix issues in **{top_issue}**
+- Coach **{worst_agent}**
+- Review negative transcripts
+""")
+
+    st.markdown("---")
+
+    email = f"""
+Subject: Customer Experience Issues Identified
+
+Hi Team,
+
+- {len(negative_df)} / {total} calls were negative
+- Top issue: {top_issue}
+- Low performer: {worst_agent}
+
+Actions:
+- Investigate category issues
+- Agent coaching
+- Transcript review
+
+Best,
+Insights Team
+"""
+    st.markdown("### 📧 Draft Email")
+    st.code(email)
 
 
 # =========================
@@ -172,17 +220,15 @@ def render_table(df):
         df = df[df["content"].str.contains(search, case=False, na=False)]
 
     clean = df[[
-        "timestamp",
+        "id",
         "agent_name",
-        "call_type",
         "product_category",
+        "city",
+        "state",
         "sentiment",
         "rep_score",
-        "duration_sec",
-        "content"
-    ]].copy()
-
-    clean["content"] = clean["content"].astype(str).str[:100] + "..."
+        "summary"
+    ]]
 
     st.dataframe(clean, use_container_width=True)
 
@@ -195,37 +241,42 @@ def render_dashboard():
 
     st.title("📞 CloseCall AI — Call Intelligence")
 
-    # filters
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        sentiment = st.selectbox("Sentiment", ["All"] + sorted(df["sentiment"].dropna().unique()))
+        call_id = st.text_input("Call ID")
 
     with col2:
-        call_type = st.selectbox("Call Type", ["All"] + sorted(df["call_type"].dropna().unique()))
+        category = st.selectbox("Product Category", ["All"] + sorted(df["product_category"].dropna().unique()))
 
     with col3:
-        agent = st.selectbox("Agent", ["All"] + sorted(df["agent_name"].dropna().unique()))
+        city = st.selectbox("City", ["All"] + sorted(df["city"].dropna().unique()))
 
-    if sentiment != "All":
-        df = df[df["sentiment"] == sentiment]
+    with col4:
+        state = st.selectbox("State", ["All"] + sorted(df["state"].dropna().unique()))
 
-    if call_type != "All":
-        df = df[df["call_type"] == call_type]
+    if call_id:
+        df = df[df["id"].astype(str).str.contains(call_id)]
 
-    if agent != "All":
-        df = df[df["agent_name"] == agent]
+    if category != "All":
+        df = df[df["product_category"] == category]
+
+    if city != "All":
+        df = df[df["city"] == city]
+
+    if state != "All":
+        df = df[df["state"] == state]
 
     st.markdown("---")
-
     render_kpis(df)
 
     st.markdown("---")
-
     render_charts(df)
 
     st.markdown("---")
+    render_insights(df)
 
+    st.markdown("---")
     render_table(df)
 
 
@@ -235,9 +286,7 @@ def render_dashboard():
 if "stage" not in st.session_state:
     st.session_state["stage"] = "loading"
 
-stage = st.session_state["stage"]
-
-if stage == "loading":
+if st.session_state["stage"] == "loading":
     render_loading()
-elif stage == "dashboard":
+else:
     render_dashboard()
