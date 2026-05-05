@@ -801,3 +801,5 @@ elif stage == "dashboard": render_dashboard()
 else:
     st.session_state["stage"] = "home"
     st.rerun()
+
+transcripts = load_sample_transcripts()
