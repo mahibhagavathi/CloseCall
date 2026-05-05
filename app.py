@@ -3,8 +3,7 @@ import pandas as pd
 import os
 import time
 import plotly.express as px
-from openai import OpenAI
-
+from groq import Groq
 # =========================
 # CONFIG
 # =========================
