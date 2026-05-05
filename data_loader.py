@@ -12,7 +12,7 @@ import os
 BASE_DIR = os.path.dirname(__file__)
 XLSX_PATH = os.path.join(BASE_DIR, "amazon_india_calls.xlsx")
 
-# Map the Excel columns → internal field names
+# Map Excel columns → internal names
 COL_MAP = {
     "Call ID":                 "id",
     "Timestamp":               "timestamp",
@@ -40,22 +40,40 @@ COL_MAP = {
     "Transcript":              "content",
 }
 
+
 @st.cache_data(show_spinner=False)
 def load_amazon_transcripts() -> list[dict]:
-    # ✅ Check file exists (prevents silent crash)
+    # ✅ Check file exists
     if not os.path.exists(XLSX_PATH):
         raise FileNotFoundError(f"Excel file not found at: {XLSX_PATH}")
 
-    # ✅ Load Excel (no strict sheet dependency)
+    # ✅ Load Excel (no sheet dependency)
     df = pd.read_excel(XLSX_PATH)
 
-    # Rename columns
+    # ✅ Clean column names (important)
+    df.columns = [c.strip() for c in df.columns]
+
+    # ✅ Rename columns
     df.rename(columns=COL_MAP, inplace=True)
 
     records = []
 
+    # ✅ LOOP — this is where everything happens
     for _, row in df.iterrows():
-        rec = {k: (row.get(k) if pd.notna(row.get(k)) else "") for k in COL_MAP.values()}
+        rec = {}
+
+        # Populate fields safely
+        for k in COL_MAP.values():
+            val = row.get(k)
+            rec[k] = val if pd.notna(val) else ""
+
+        # ✅ FIX: Create "sentiment" (THIS WAS YOUR BUG)
+        rec["sentiment"] = str(rec.get("sentiment_raw", "")).strip().title()
+
+        # Optional: clean values
+        valid = {"Positive", "Negative", "Mixed"}
+        if rec["sentiment"] not in valid:
+            rec["sentiment"] = "Mixed"
 
         # Normalize numeric fields
         for num_col in ("duration_sec", "hold_sec", "agent_exp_yrs", "transfers", "csat"):
@@ -64,7 +82,7 @@ def load_amazon_transcripts() -> list[dict]:
             except (ValueError, TypeError):
                 rec[num_col] = 0
 
-        # Duration label
+        # Duration label (for UI)
         d = rec["duration_sec"]
         rec["duration_label"] = f"{d // 60}m {d % 60}s" if d >= 60 else f"{d}s"
 
@@ -73,7 +91,7 @@ def load_amazon_transcripts() -> list[dict]:
     return records
 
 
-# ✅ Backward compatibility (your app still uses this)
+# ✅ Keep this (your app depends on it)
 def load_sample_transcripts() -> list[dict]:
     return load_amazon_transcripts()
 
@@ -91,8 +109,12 @@ def load_csv_transcripts(uploaded_file) -> list[dict]:
     if "id" not in df.columns:
         df["id"] = [f"CALL-{i+1:04d}" for i in range(len(df))]
 
-    for col in ("customer_name", "company", "city", "state", "product_category",
-                "channel", "call_type_raw", "csat", "duration_label"):
+    # Add missing fields for UI compatibility
+    for col in (
+        "customer_name", "company", "city", "state",
+        "product_category", "channel", "call_type_raw",
+        "csat", "duration_label", "sentiment"
+    ):
         if col not in df.columns:
             df[col] = ""
 
